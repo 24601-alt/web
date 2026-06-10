@@ -1,255 +1,86 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI 경영 컨설턴트</title>
+window.generateAdvice = async () => {
 
-<style>
-body{
-font-family:Arial;
-background:#f4f4f4;
-padding:20px;
-}
+  try {
 
-.container{
-max-width:900px;
-margin:auto;
-background:white;
-padding:20px;
-border-radius:10px;
-box-shadow:0 0 10px rgba(0,0,0,0.1);
-}
+    const prompt =
+      document.getElementById("prompt").value;
 
-h1{
-text-align:center;
-color:#0a4d8c;
-}
+    if (!prompt.trim()) {
+      alert("내용을 입력하세요.");
+      return;
+    }
 
-textarea{
-width:100%;
-height:120px;
-padding:10px;
-}
+    const GEMINI_API_KEY = "여기에_실제_API키";
 
-button{
-padding:10px 20px;
-margin:5px;
-background:#0a4d8c;
-color:white;
-border:none;
-border-radius:5px;
-cursor:pointer;
-}
+    document.getElementById("result").innerText =
+      "AI가 분석 중입니다...";
 
-#result{
-margin-top:20px;
-padding:15px;
-background:#eef6ff;
-border-radius:10px;
-white-space:pre-wrap;
-}
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: `
+당신은 경영 컨설턴트입니다.
 
-#history{
-margin-top:20px;
-background:#fafafa;
-padding:15px;
-border-radius:10px;
-}
-</style>
-</head>
+다음 상황을 분석하고
 
-<body>
+1. 문제 원인
+2. 해결 방안
+3. 마케팅 전략
+4. 예상 효과
 
-<div class="container">
+를 한국어로 작성하세요.
 
-<h1>📈 AI 경영 컨설턴트</h1>
+${prompt}
+                  `
+                }
+              ]
+            }
+          ]
+        })
+      }
+    );
 
-<p>
-기업 운영 상황을 입력하면 AI가 경영 전략을 제안합니다.
-</p>
+    const data = await response.json();
 
-<button onclick="login()">Google 로그인</button>
-<button onclick="logout()">로그아웃</button>
+    console.log("Gemini 응답:", data);
 
-<p id="userInfo"></p>
+    if (!response.ok) {
+      alert(
+        "Gemini 오류:\n" +
+        JSON.stringify(data, null, 2)
+      );
+      return;
+    }
 
-<textarea id="prompt"
-placeholder="예: 우리 카페는 매출이 감소하고 있습니다."></textarea>
+    const text =
+      data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-<br>
+    if (!text) {
+      alert(
+        "AI 응답이 비어있습니다.\n콘솔(F12)을 확인하세요."
+      );
+      return;
+    }
 
-<button onclick="generateAdvice()">
-AI 분석 받기
-</button>
+    document.getElementById("result").innerText =
+      text;
 
-<button onclick="speakResult()">
-🔊 음성 읽기
-</button>
+  } catch (error) {
 
-<div id="result"></div>
+    console.error(error);
 
-<div id="history">
-<h3>상담 기록</h3>
-<div id="records"></div>
-</div>
-
-</div>
-
-<script type="module">
-
-import { initializeApp }
-from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-
-import {
-getAuth,
-GoogleAuthProvider,
-signInWithPopup,
-signOut
-}
-from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-import {
-getFirestore,
-collection,
-addDoc,
-getDocs
-}
-from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const firebaseConfig = {
-
-apiKey:"AIzaSyDO-v52Ehwphh5gW0WBzu9_DliMhOzy4Yo,
-",
-
-authDomain:"여기에_AUTH_DOMAIN",
-
-projectId:"여기에_PROJECT_ID",
-
-storageBucket:"여기에_STORAGE",
-
-messagingSenderId:"여기에_ID",
-
-appId:"여기에_APP_ID"
-
+    alert(
+      "오류 발생:\n" +
+      error.message
+    );
+  }
 };
-
-const app = initializeApp(firebaseConfig);
-
-const auth = getAuth(app);
-
-const db = getFirestore(app);
-
-const provider = new GoogleAuthProvider();
-
-window.login = async ()=>{
-
-const result = await signInWithPopup(auth,provider);
-
-document.getElementById("userInfo").innerText=
-"로그인 : "+result.user.displayName;
-
-loadRecords();
-}
-
-window.logout = async ()=>{
-
-await signOut(auth);
-
-document.getElementById("userInfo").innerText=
-"로그아웃됨";
-}
-
-window.generateAdvice = async ()=>{
-
-const prompt =
-document.getElementById("prompt").value;
-
-const GEMINI_API_KEY =
-"여기에_발급받은_API_KEY";
-
-const response = await fetch(
-`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({
-contents:[
-{
-parts:[
-{
-text:
-`당신은 경영 컨설턴트입니다.
-다음 상황에 대한 해결책을 제안하세요.
-
-${prompt}`
-}
-]
-}
-]
-})
-}
-);
-
-const data = await response.json();
-
-const text =
-data.candidates[0].content.parts[0].text;
-
-document.getElementById("result").innerText =
-text;
-
-await addDoc(
-collection(db,"consulting"),
-{
-question:prompt,
-answer:text,
-time:new Date().toLocaleString()
-}
-);
-
-loadRecords();
-}
-
-window.loadRecords = async ()=>{
-
-const snapshot =
-await getDocs(collection(db,"consulting"));
-
-let html="";
-
-snapshot.forEach(doc=>{
-
-const d=doc.data();
-
-html+=`
-<div>
-<b>${d.time}</b><br>
-${d.question}<hr>
-</div>
-`;
-});
-
-document.getElementById("records").innerHTML=
-html;
-}
-
-window.speakResult = ()=>{
-
-const text =
-document.getElementById("result").innerText;
-
-const utter =
-new SpeechSynthesisUtterance(text);
-
-utter.lang="ko-KR";
-
-speechSynthesis.speak(utter);
-}
-
-</script>
-
-</body>
-</html>
