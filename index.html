@@ -50,17 +50,16 @@
                     🔊 음성으로 듣기 (TTS)
                 </button>
             </div>
-            <div id="ai-response" class="bg-gray-50 p-4 rounded-lg text-gray-700 whitespace-pre-wrap leading-relaxed">
-                </div>
+            <div id="ai-response" class="bg-gray-50 p-4 rounded-lg text-gray-700 whitespace-pre-wrap leading-relaxed"></div>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        // Firebase 설정 (본인의 Firebase 프로젝트 설정값으로 변경 필수)
+        // 1. 파이어베이스 연결 설정 (본인 정보 입력)
         const firebaseConfig = {
             apiKey: "YOUR_FIREBASE_API_KEY",
             authDomain: "YOUR_FIREBASE_AUTH_DOMAIN",
@@ -70,21 +69,20 @@
             appId: "YOUR_FIREBASE_APP_ID"
         };
 
-        // Firebase 초기화
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
 
-        // Apps Script 웹앱 URL (호출용)
+        // 2. Apps Script 주소 설정 (안전한 중계 주소)
         const APPS_SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL";
 
-        // --- 1. 회원가입 / 로그인 / 로그아웃 기능 ---
+        // [기능 A] 회원가입 및 로그인 관리
         window.signUp = async () => {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             try {
                 await createUserWithEmailAndPassword(auth, email, password);
-                alert("회원가입 성공!");
+                alert("회원가입이 완료되었습니다!");
             } catch (error) {
                 alert("회원가입 실패: " + error.message);
             }
@@ -104,7 +102,7 @@
             await signOut(auth);
         };
 
-        // 로그인 상태 감지
+        // 로그인 상태에 따른 화면 전환 규칙
         onAuthStateChanged(auth, (user) => {
             const authContainer = document.getElementById('auth-container');
             const mainContainer = document.getElementById('main-container');
@@ -120,20 +118,20 @@
             }
         });
 
-        // --- 2. AI 연동 및 데이터베이스(Firestore) 연동 ---
+        // [기능 B] AI 연동 (Apps Script 호출) 및 데이터 저장 (Firestore)
         window.analyzeBusiness = async () => {
             const query = document.getElementById('business-query').value;
             const submitBtn = document.getElementById('submit-btn');
             const aiResponseDiv = document.getElementById('ai-response');
             const resultBox = document.getElementById('result-box');
 
-            if (!query.trim()) return alert("내용을 입력해주세요.");
+            if (!query.trim()) return alert("경영 고민 내용을 입력해주세요.");
 
             submitBtn.innerText = "AI가 전략을 분석 중입니다...";
             submitBtn.disabled = true;
 
             try {
-                // Apps Script를 거쳐 생성형 AI API 호출 (또는 직접 호출 가능)
+                // Apps Script로 요청 전송 (보안 유지)
                 const response = await fetch(APPS_SCRIPT_URL, {
                     method: "POST",
                     body: JSON.stringify({ prompt: "당신은 전문 경영 컨설턴트입니다. 다음 상황에 대한 구체적인 경영 전략을 제안해주세요: " + query })
@@ -141,11 +139,11 @@
                 const data = await response.json();
                 const aiText = data.text || "분석 결과를 가져오지 못했습니다.";
 
-                // 화면에 표시
+                // 결과 화면 표시
                 aiResponseDiv.innerText = aiText;
                 resultBox.classList.remove('hidden');
 
-                // Firebase Firestore에 데이터 저장 (연동 확인용)
+                // 파이어베이스 데이터베이스(Firestore)에 상담 기록 누적 저장
                 const user = auth.currentUser;
                 if (user) {
                     await addDoc(collection(db, "management_consulting"), {
@@ -155,28 +153,26 @@
                         response: aiText,
                         timestamp: new Date()
                     });
-                    console.log("Firestore 데이터 저장 완료");
                 }
 
             } catch (error) {
                 console.error(error);
-                alert("오류가 발생했습니다.");
+                alert("분석 중 오류가 발생했습니다. Apps Script 설정을 확인해 주세요.");
             } finally {
                 submitBtn.innerText = "AI 경영 전략 분석 요청";
                 submitBtn.disabled = false;
             }
         };
 
-        // --- 3. TTS (음성 합성) 기능 ---
+        // [기능 C] 브라우저 내장 TTS 기능 실행
         window.speakText = () => {
             const text = document.getElementById('ai-response').innerText;
             if (!text) return;
 
-            // 브라우저 내장 Web Speech API 활용 (가장 가볍고 확실한 방법)
-            window.speechSynthesis.cancel(); // 기존 재생 중인 음성 중지
+            window.speechSynthesis.cancel(); // 현재 읽고 있는 게 있다면 중지
             const speech = new SpeechSynthesisUtterance(text);
             speech.lang = 'ko-KR';
-            speech.rate = 1.0; // 속도
+            speech.rate = 1.0;
             window.speechSynthesis.speak(speech);
         };
     </script>
