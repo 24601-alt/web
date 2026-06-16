@@ -185,7 +185,7 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      border-b: 1px dashed #ddd;
+      border-bottom: 1px dashed #ddd; /* 오타 수정: border-b -> border-bottom */
       padding-bottom: 8px;
     }
 
@@ -290,7 +290,6 @@
   </div>
 
   <script type="module">
-    // 지정해주신 Firebase SDK 10.12.2 버전 유지
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import {
       getAuth,
@@ -309,7 +308,7 @@
       off
     } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 
-    // 지정해주신 프로젝트의 Firebase 정보 셋팅
+    // Firebase 설정
     const firebaseConfig = {
       apiKey: "AIzaSyA4T6HhnvZsesbGco9rzhprUz2AbG8NnRs",
       authDomain: "project-dcdba.firebaseapp.com",
@@ -325,18 +324,16 @@
     const auth = getAuth(app);
     const database = getDatabase(app);
 
-    // Apps Script 웹앱 배포 URL 주소를 이곳에 적어주세요.
+    // ⚠️ 생성하신 Google Apps Script 웹앱 배포 URL 주소를 이곳에 정확히 입력하세요.
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzaIrxHJKA_tS_Yb8-7aKIYQ2PnoVlLHPBu3_8OK6waweI_Gv7syLFRHPc_E5VRK3wn/exec";
 
     const authSection = document.getElementById('authSection');
     const mainSection = document.getElementById('mainSection');
-
     const emailInput = document.getElementById('emailInput');
     const passwordInput = document.getElementById('passwordInput');
     const loginBtn = document.getElementById('loginBtn');
     const signupBtn = document.getElementById('signupBtn');
     const logoutBtn = document.getElementById('logoutBtn');
-
     const userEmail = document.getElementById('userEmail');
     const titleInput = document.getElementById('titleInput');
     const contentInput = document.getElementById('contentInput');
@@ -360,20 +357,17 @@
         alert('이메일과 비밀번호를 모두 입력해주세요.');
         return null;
       }
-
       if (password.length < 6) {
         alert('비밀번호는 6자리 이상이어야 합니다.');
         return null;
       }
-
       return { email, password };
     }
 
-    // 회원가입 이벤트
+    // 회원가입
     signupBtn.addEventListener('click', async () => {
       const account = getEmailAndPassword();
       if (!account) return;
-
       try {
         await createUserWithEmailAndPassword(auth, account.email, account.password);
         alert('회원가입이 완료되었습니다.');
@@ -382,11 +376,10 @@
       }
     });
 
-    // 로그인 이벤트
+    // 로그인
     loginBtn.addEventListener('click', async () => {
       const account = getEmailAndPassword();
       if (!account) return;
-
       try {
         await signInWithEmailAndPassword(auth, account.email, account.password);
       } catch (error) {
@@ -394,7 +387,7 @@
       }
     });
 
-    // 로그아웃 이벤트
+    // 로그아웃
     logoutBtn.addEventListener('click', async () => {
       try {
         await signOut(auth);
@@ -403,7 +396,7 @@
       }
     });
 
-    // 유저 상태 감지 감시자
+    // 유저 상태 인식 감시자
     onAuthStateChanged(auth, (user) => {
       if (user) {
         currentUser = user;
@@ -431,11 +424,10 @@
       dataList.innerHTML = '';
     }
 
-    // 실시간 파이어베이스 리스너 스타트
+    // Firebase 실시간 리스너
     function startRealtimeDataListener(uid) {
       stopRealtimeDataListener();
       setStatus('경영 데이터 분석 기록을 불러오는 중입니다...');
-
       currentItemsRef = ref(database, `users/${uid}/items`);
 
       onValue(currentItemsRef, (snapshot) => {
@@ -462,7 +454,7 @@
       }
     });
 
-    // 핵심 로직: 생성형 AI 호출 후 파이어베이스 실시간 저장 통합본
+    // 🛠️ 핵심 수정 구역: CORS 에러 방지 및 다중 Key 수신 조건 최적화
     async function generateAIAndSaveData() {
       if (!currentUser) {
         alert('로그인이 필요합니다.');
@@ -481,24 +473,34 @@
       addBtn.disabled = true;
 
       try {
-        // 1. Google Apps Script 프록시 호출
+        // [CORS 보안 및 통신 규격 수정 완료] 
         const response = await fetch(APPS_SCRIPT_URL, {
           method: "POST",
+          mode: "cors", // 명시적 CORS 모드 허용
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8" // 가짜 CORS 차단을 우회하기 위한 텍스트 처리
+          },
           body: JSON.stringify({ 
             prompt: `당신은 유능한 대기업 최고경영자(CEO)이자 비즈니스 컨설턴트입니다. 다음 상황에 대해 실행 가능한 핵심 경영 전략과 해결책을 구체적으로 답변해 주세요. \n[주제]: ${title} \n[상황 상황]: ${content}` 
           })
         });
         
         const data = await response.json();
-        const aiResponseText = data.text || "AI 분석 결과를 가져오는 데 실패했습니다.";
+        
+        // 지난 번 보정된 다중 API 포맷(text, result, response 등) 중 매칭되는 모든 텍스트를 캐치함
+        const aiResponseText = data.text || data.result || data.response || data.message || "AI 분석 결과를 가져오는 데 실패했습니다.";
 
-        // 2. 파이어베이스 실시간 데이터베이스 보관함에 결과 누적 저장
+        if(data.error) {
+          throw new Error(data.error);
+        }
+
+        // Firebase 데이터베이스에 결과 적재
         const itemsRef = ref(database, `users/${currentUser.uid}/items`);
         const newItemRef = push(itemsRef);
 
         await set(newItemRef, {
           title: title,
-          content: aiResponseText, // 원본 내용 대신 AI의 종합 피드백 결과를 보관함에 보관
+          content: aiResponseText,
           createdAt: new Date().toLocaleString('ko-KR')
         });
 
@@ -507,17 +509,16 @@
         alert('AI 컨설팅 리포트 발급 및 히스토리 저장이 완료되었습니다!');
       } catch (error) {
         console.error(error);
-        alert('AI 연동 처리 중 문제가 발생했습니다. Apps Script 주소 및 세팅을 점검하세요.');
+        alert('AI 연동 처리 중 문제가 발생했습니다.\n이유: ' + error.message);
       } finally {
         addBtn.innerText = "AI 컨설팅 리포트 생성 및 저장";
         addBtn.disabled = false;
       }
     }
 
-    // 데이터 영구 삭제
+    // 데이터 삭제
     window.deleteData = async function(id) {
       if (!currentUser) return;
-
       const isConfirmed = confirm('작성된 비즈니스 리포트를 히스토리에서 정말 삭제하시겠습니까?');
       if (!isConfirmed) return;
 
@@ -534,24 +535,22 @@
       const contentText = document.getElementById(`content-text-${id}`).innerText;
       if (!contentText) return;
 
-      window.speechSynthesis.cancel(); // 작동 중인 이전 오디오 음소거 처리
+      window.speechSynthesis.cancel(); 
       const utterance = new SpeechSynthesisUtterance(contentText);
       utterance.lang = 'ko-KR';
-      utterance.rate = 1.0; // 배속 제어
+      utterance.rate = 1.0; 
       window.speechSynthesis.speak(utterance);
     };
 
-    // 데이터 화면에 렌더링 그리기
+    // UI 동적 드로잉 렌더링
     function renderData(data) {
       dataList.innerHTML = '';
-
       if (!data) {
         dataList.innerHTML = '<div class="empty">아직 발급받은 AI 경영 리포트 히스토리가 존재하지 않습니다.</div>';
         return;
       }
 
       const entries = Object.entries(data).reverse();
-
       entries.forEach(([id, item]) => {
         const div = document.createElement('div');
         div.className = 'item';
@@ -570,7 +569,6 @@
             </div>
           </div>
         `;
-
         dataList.appendChild(div);
       });
     }
@@ -586,31 +584,21 @@
 
     function getKoreanErrorMessage(code) {
       switch (code) {
-        case 'auth/email-already-in-use':
-          return '이미 가입된 이메일입니다.';
-        case 'auth/invalid-email':
-          return '이메일 형식이 올바르지 않습니다.';
-        case 'auth/weak-password':
-          return '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.';
-        case 'auth/user-not-found':
-          return '가입되지 않은 이메일입니다.';
-        case 'auth/wrong-password':
-          return '비밀번호가 올바르지 않습니다.';
-        case 'auth/invalid-credential':
-          return '이메일 또는 비밀번호가 올바르지 않습니다.';
-        case 'auth/network-request-failed':
-          return '네트워크 연결을 확인해주세요.';
-        default:
-          return `오류가 발생했습니다: ${code}`;
+        case 'auth/email-already-in-use': return '이미 가입된 이메일입니다.';
+        case 'auth/invalid-email': return '이메일 형식이 올바르지 않습니다.';
+        case 'auth/weak-password': return '비밀번호가 너무 약합니다. 6자리 이상으로 입력해주세요.';
+        case 'auth/user-not-found': return '가입되지 않은 이메일입니다.';
+        case 'auth/wrong-password': return '비밀번호가 올바르지 않습니다.';
+        case 'auth/invalid-credential': return '이메일 또는 비밀번호가 올바르지 않습니다.';
+        case 'auth/network-request-failed': return '네트워크 연결을 확인해주세요.';
+        default: return `오류가 발생했습니다: ${code}`;
       }
     }
 
-    // 엔터키 제어 필터링 단축키
+    // 엔터키 제어 단축키 기능
     document.addEventListener('keydown', function(event) {
       if (event.key !== 'Enter') return;
-
       const activeId = document.activeElement.id;
-
       if (activeId === 'emailInput' || activeId === 'passwordInput') {
         loginBtn.click();
       }
